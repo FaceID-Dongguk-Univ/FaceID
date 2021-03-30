@@ -90,7 +90,7 @@ def is_verified_idnum(cv_image):
 
 
 if __name__ == "__main__":
-    image = cv2.imread("idcard.jpg")
+    image = cv2.imread("your idcard here")
 
     # check ID number
     print(is_verified_idnum(image))
