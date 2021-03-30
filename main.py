@@ -12,7 +12,7 @@ from idcard import is_verified_idnum, crop_face_idcard
 # args = vars(ap.parse_args())
 
 
-def identification(image, detector, predictor):
+def identification(detector, predictor):
     print("[INFO] starting video stream...")
     vs = VideoStream(src=0).start()
     time.sleep(2)
@@ -22,7 +22,7 @@ def identification(image, detector, predictor):
         frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         face_detector = detector(frame_gray, 1)
-        print("[INFO] The number of faces detected : {}".format(len(face_detector)))
+        # print("[INFO] The number of faces detected : {}".format(len(face_detector)))
 
         for face in face_detector:
             landmarks = predictor(frame, face)
@@ -30,6 +30,7 @@ def identification(image, detector, predictor):
             landmark_list = []
             for p in landmarks.parts():
                 landmark_list.append([p.x, p.y])
+                cv2.circle(frame, (p.x, p.y), 2, (0, 255, 0), -1)
 
             h = landmark_list[8][1] - landmark_list[27][1]
             w = landmark_list[16][0] - landmark_list[0][0]
@@ -40,6 +41,7 @@ def identification(image, detector, predictor):
             #     color = (255, 0, 0)
             #     print("[INFO] you're not picture!")
             #     얼굴 크롭해서 얼굴 인식 모델에 넘겨줌
+            #     break
             # else:
             #     label = "Robot"
             #     color = (0, 0, 255)
@@ -68,7 +70,17 @@ if __name__ == "__main__":
 
     while True:
         file_name = input("[INFO] Type ID card image file path: ")
+
         if file_name == "q":
             break
-        identification(file_name, main_detector, main_predictor)
+
         print("[INFO] Verifying ID card...")
+        idcard_image = cv2.imread(file_name)
+
+        if is_verified_idnum(idcard_image):
+            print("[INFO] Your ID card is verified")
+            identification(main_detector, main_predictor)
+
+        else:
+            print("[ERROR] Invalid ID card!")
+

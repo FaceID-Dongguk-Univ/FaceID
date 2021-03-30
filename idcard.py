@@ -50,7 +50,7 @@ def crop_face_idcard(cv_image):
         return cropped
 
     else:
-        print("unvalid")
+        print("invalid")
 
 
 def get_idnum(cv_image):
@@ -77,7 +77,7 @@ def is_verified_idnum(cv_image):
         text = text.split('\n')[2].replace('-', '')
         
     except Exception as e:
-        print("[INFO] Cannot find ID card")
+        print("[ERROR] Cannot find ID card")
 
     weights = np.array([2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5])
     id_num_array = np.array(list(text[:-1]), np.int32)
@@ -86,7 +86,7 @@ def is_verified_idnum(cv_image):
         return True
     
     else:
-        raise Exception("[INFO] Un-valid ID number!")
+        return False
 
 
 if __name__ == "__main__":
