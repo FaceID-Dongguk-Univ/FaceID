@@ -12,12 +12,11 @@ import cv2
 # JAWLINE = list(range(0, 17))
 
 
-def crop_face_idcard(image_path):
+def crop_face_idcard(cv_image):
     detector = dlib.get_frontal_face_detector()
     predictor = dlib.shape_predictor('weights/shape_predictor_68_face_landmarks.dat')
-
-    image = cv2.imread(image_path)
-    img_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
+    img_gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
 
     face_detector = detector(img_gray, 1)
     print("The number of faces detected : {}".format(len(face_detector)))
@@ -53,6 +52,7 @@ def crop_face_idcard(image_path):
 
 
 if __name__ == "__main__":
-    result = crop_face_idcard("your image here")
+    image = cv2.imread("your image here")
+    result = crop_face_idcard(image)
     cv2.imshow("result", result)
     cv2.waitKey(0)
