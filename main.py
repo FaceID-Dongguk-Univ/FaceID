@@ -4,7 +4,7 @@ from imutils.video import VideoStream
 import dlib
 import time
 # import argparse
-from idcard import is_verified_idnum, crop_face_idcard
+from idcard import is_verified_idnum, is_verified_age
 
 # ap = argparse.ArgumentParser()
 # ap.add_argument("-i", "--idfile", type=str,
@@ -77,7 +77,7 @@ if __name__ == "__main__":
         print("[INFO] Verifying ID card...")
         idcard_image = cv2.imread(file_name)
 
-        if is_verified_idnum(idcard_image):
+        if is_verified_idnum(idcard_image) and is_verified_age(idcard_image):
             print("[INFO] Your ID card is verified")
             identification(main_detector, main_predictor)
 
