@@ -5,6 +5,7 @@ import dlib
 import time
 # import argparse
 from idcard import is_verified_idnum, is_verified_age
+import tensorflow as tf
 
 # ap = argparse.ArgumentParser()
 # ap.add_argument("-i", "--idfile", type=str,
@@ -12,7 +13,7 @@ from idcard import is_verified_idnum, is_verified_age
 # args = vars(ap.parse_args())
 
 
-def identification(detector, predictor):
+def identification(detector, predictor, fr_model):
     print("[INFO] starting video stream...")
     vs = VideoStream(src=0).start()
     time.sleep(2)
@@ -45,6 +46,11 @@ def identification(detector, predictor):
             # else:
             #     label = "Robot"
             #     color = (0, 0, 255)
+            cropped = frame.copy()
+            cropped = cropped[y-2*h: y+h, x-w: x+w]
+            print(cropped.shape)
+            # print()
+
 
             cv2.rectangle(frame, (x - w, y + h), (x + w, y - 2 * h),
                           (0, 0, 255), 3)
@@ -67,6 +73,8 @@ if __name__ == "__main__":
     print("[INFO] loading face detector weights...")
     main_detector = dlib.get_frontal_face_detector()
     main_predictor = dlib.shape_predictor("weights/shape_predictor_68_face_landmarks.dat")
+    arcface = tf.keras.models.load_model("./weights/resnet50_arcface_epochs50.hdf5")
+    arcface = tf.keras.Model(inputs=arcface.input, outputs=arcface.layers[-3].output)
 
     while True:
         file_name = input("[INFO] Type ID card image file path: ")
@@ -79,7 +87,7 @@ if __name__ == "__main__":
 
         if is_verified_idnum(idcard_image) and is_verified_age(idcard_image):
             print("[INFO] Your ID card is verified")
-            identification(main_detector, main_predictor)
+            identification(main_detector, main_predictor, arcface)
 
         else:
             print("[ERROR] Invalid ID card!")

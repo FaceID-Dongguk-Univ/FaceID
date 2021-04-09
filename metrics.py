@@ -1,3 +1,12 @@
+# -----
+# author: good-riverdeer
+# An implementation of ArcFace: Additive Angular Margin Loss for Deep Face Recognition
+# https://arxiv.org/abs/1801.07698
+#
+# This ArcFace code is based on 4uiiurz1's keras-arcface.
+# https://github.com/4uiiurz1/keras-arcface
+# -----
+
 from tensorflow.keras import backend as K
 from tensorflow.keras.layers import Layer
 from tensorflow.keras import regularizers
@@ -14,6 +23,11 @@ def tf_log10(x):
 def PSNR(y_true, y_pred):
     max_pixel = 1.0
     return 10.0 * tf_log10((max_pixel**2) / (K.mean(K.square(y_pred - y_true))))
+
+
+def SSIM(y_true, y_pred):
+    max_pixel = 1.0
+    return tf.image.ssim(y_pred, y_true, max_pixel)
 
 
 class VGGLoss(tf.keras.losses.Loss):
@@ -43,6 +57,14 @@ class ArcFace(Layer):
         self.m = m
         self.regularizer = regularizers.get(regularizer)
 
+    def get_config(self):
+        base_config = super(ArcFace, self).get_config()
+        base_config['n_classes'] = self.n_classes
+        base_config["s"] = self.s
+        base_config["m"] = self.m
+        base_config['regularizer'] = self.regularizer
+        return base_config
+
     def build(self, input_shape):
         super(ArcFace, self).build(input_shape[0])
         self.W = self.add_weight(name='W',
@@ -54,22 +76,28 @@ class ArcFace(Layer):
     def call(self, inputs):
         x, y = inputs
         c = K.shape(x)[-1]
+
         # normalize feature
         x = tf.nn.l2_normalize(x, axis=1)
+
         # normalize weights
         W = tf.nn.l2_normalize(self.W, axis=0)
+
         # dot product
         logits = x @ W
+
         # add margin
         # clip logits to prevent zero division when backward
         theta = tf.acos(K.clip(logits, -1.0 + K.epsilon(), 1.0 - K.epsilon()))
         target_logits = tf.cos(theta + self.m)
+
         # sin = tf.sqrt(1 - logits**2)
         # cos_m = tf.cos(logits)
         # sin_m = tf.sin(logits)
         # target_logits = logits * cos_m - sin * sin_m
         #
         logits = logits * (1 - y) + target_logits * y
+
         # feature re-scale
         logits *= self.s
         out = tf.nn.softmax(logits)
