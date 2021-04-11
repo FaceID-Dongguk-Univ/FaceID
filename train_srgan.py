@@ -1,135 +1,162 @@
-import os
-from tqdm import tqdm
 import tensorflow as tf
-
 from glob import glob
 import cv2
+import time
+import datetime
 
-from metrics import VGGLoss
-from networks.resolution.srgan import Generator, Discriminator, get_srgan
-
-# prepare dataset
-train_list = glob("./lfw-deepfunneled/*/*.jpg")
-INPUT_SIZE = (250 // 4, 250 // 4, 3)
-TARGET_SIZE = (250, 250, 3)
-BATCH_SIZE = 32
+from networks.resolution.srgan import generator, discriminator
+from metrics import PSNR, SSIM
 
 
-def get_data():
-    for img_path in train_list:
-        try:
-            img = cv2.imread(img_path)
+def get_train_data(input_size, target_size, img_list, batch_size):
+    def generator_train():
+        for img in img_list:
+            img = cv2.imread(img)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            img = img / 255.0
-            resized = cv2.resize(img, INPUT_SIZE[:2])
-            bicubic = cv2.resize(resized, TARGET_SIZE[:2])
-            yield bicubic, img
-        except GeneratorExit:
-            return
+            img = img / 175.0
+            img = img - 1.
+            resized = cv2.resize(img, input_size[:2])
+            target = cv2.resize(img, target_size[:2])
+            yield resized, target
+
+    train_ds = tf.data.Dataset.from_generator(
+        generator_train,
+        output_types=(tf.float32, tf.float32),
+        output_shapes=(tf.TensorShape(input_size), tf.TensorShape(target_size))
+    )
+    train_ds = train_ds.shuffle(buffer_size=128)
+    train_ds = train_ds.prefetch(buffer_size=2)
+    train_ds = train_ds.batch(batch_size)
+    return train_ds
 
 
-ds = tf.data.Dataset.from_generator(
-    get_data,
-    output_types=(tf.float32, tf.float32),
-    output_shapes=(tf.TensorShape([TARGET_SIZE[0], TARGET_SIZE[1], 3]),
-                   tf.TensorShape([TARGET_SIZE[0], TARGET_SIZE[1], 3]))
-)
+def train(input_size, target_size, img_list, batch_size,
+          lr_init, lr_decay,
+          n_epoch_init, n_epoch):
+    """
+    train SRGAN
+    :param input_size: LR images tensor shape
+    :param target_size: SR images tensor shape
+    :param img_list: train images list
+    :param batch_size: batch size
+    :param lr_init: learning rate - Generator's init_train
+    :param lr_decay: learning rate decay ratio
+    :param n_epoch_init: number of epochs - Generator's init_train
+    :param n_epoch: number of epochs - SRGAN
+    """
+    decay_every = int(n_epoch / 2)
 
-# train-validation split
-DATA_SIZE = len(train_list)
-TRAIN_SIZE = int(0.7 * DATA_SIZE)
-ds = ds.shuffle(buffer_size=1024)
-train_ds = ds.take(TRAIN_SIZE)
-val_ds = ds.skip(TRAIN_SIZE)
+    # define model
+    G = generator(input_size)
+    D = discriminator(target_size)
+    vgg = tf.keras.applications.VGG19(include_top=False, weights='imagenet', input_shape=target_size)
+    vgg.trainable = False
+    vgg = tf.keras.Model(inputs=vgg.input, outputs=vgg.get_layer('block5_conv4').output)
+    vgg.trainable = False
 
-train = train_ds.shuffle(buffer_size=1024).batch(BATCH_SIZE)
-val = val_ds.batch(BATCH_SIZE)
+    lr_v = tf.Variable(lr_init)
+    g_optimizer_init = tf.keras.optimizers.Adam(lr_v)
+    g_optimizer = tf.keras.optimizers.Adam(lr_v)
+    d_optimizer = tf.keras.optimizers.Adam(lr_v)
+
+    train_ds = get_train_data(input_size, target_size, img_list, batch_size)
+
+    log_dir = "logs\\srgan\\"
+    g_init_summary_writer = tf.summary.create_file_writer(
+        log_dir + "fit_init\\" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+
+    n_step_epoch = round(n_epoch_init // batch_size)
+    for epoch in range(n_epoch_init):
+        for step, (lr_patches, hr_patches) in enumerate(train_ds.take(n_step_epoch)):
+            if lr_patches.shape[0] != batch_size:
+                break
+            step_time = time.time()
+
+            with tf.GradientTape() as tape:
+                fake_hr_patches = G(lr_patches)
+                mse_loss = tf.reduce_mean(tf.math.squared_difference(hr_patches, fake_hr_patches))
+                mse_loss = tf.reduce_mean(mse_loss)
+
+            grad = tape.gradient(mse_loss, G.trainable_weights)
+            g_optimizer_init.apply_gradients(zip(grad, G.trainable_weights))
+            print(f'Epoch: [{epoch}/{n_epoch_init}] step: [{step}/{n_step_epoch}] \\ '
+                  f'time: {time.time() - step_time:.3f}s, mse: {mse_loss:.3f}')
+
+            with g_init_summary_writer.as_default():
+                tf.summary.scalar('mse_loss', mse_loss, epoch)
+
+    log_dir = "logs\\srgan\\"
+    summary_writer = tf.summary.create_file_writer(
+        log_dir + "fit\\" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+
+    n_step_epoch = round(n_epoch // batch_size)
+    for epoch in range(n_epoch):
+        for step, (lr_patches, hr_patches) in enumerate(train_ds.take(n_step_epoch)):
+            if lr_patches.shape[0] != batch_size:
+                break
+            step_time = time.time()
+
+            with tf.GradientTape(persistent=True) as tape:
+                fake_patches = G(lr_patches)
+                logits_fake = D(fake_patches)
+                logits_real = D(hr_patches)
+                feature_fake = vgg((fake_patches + 1) / 2.)
+                feature_real = vgg((hr_patches + 1) / 2.)
+
+                d_loss1 = tf.nn.sigmoid_cross_entropy_with_logits(tf.ones_like(logits_real), logits_real)
+                d_loss1 = tf.reduce_mean(d_loss1)
+                d_loss2 = tf.nn.sigmoid_cross_entropy_with_logits(tf.zeros_like(logits_fake), logits_fake)
+                d_loss2 = tf.reduce_mean(d_loss2)
+                d_loss = d_loss1 + d_loss2
+
+                g_gan_loss = 1e-3 * tf.nn.sigmoid_cross_entropy_with_logits(tf.ones_like(logits_fake), logits_fake)
+                g_gan_loss = tf.reduce_mean(g_gan_loss)
+
+                mse_loss = tf.reduce_mean(tf.math.squared_difference(hr_patches, fake_patches))
+                mse_loss = tf.reduce_mean(mse_loss)
+
+                vgg_loss = 2e-6 * tf.reduce_mean(tf.math.squared_difference(feature_real, feature_fake))
+                vgg_loss = tf.reduce_mean(vgg_loss)
+
+                g_loss = mse_loss + vgg_loss + g_gan_loss
+
+            grad = tape.gradient(g_loss, G.trainable_weights)
+            g_optimizer.apply_gradients(zip(grad, G.trainable_weights))
+
+            grad = tape.gradient(d_loss, D.trainable_weights)
+            d_optimizer.apply_gradients(zip(grad, D.trainable_weights))
+
+            psnr_value = PSNR(hr_patches, fake_patches)
+            ssim_value = SSIM(hr_patches, fake_patches)
+            print(f"Epoch: [{epoch}/{n_epoch}] step: [{step}/{n_step_epoch}] time: {time.time() - step_time:.3f}s, \\ "
+                  f"g_loss(mse: {mse_loss:.3f}, vgg:{vgg_loss:.3f}, adv: {g_gan_loss: .3f}) d_loss: {d_loss:.3f}, \\ "
+                  f"Metrics: [PSNR: {psnr_value:.3f}, SSIM: {ssim_value:.3f}]")
+
+        if epoch != 0 and epoch % decay_every == 0:
+            new_lr_decay = lr_decay ** (epoch // decay_every)
+            lr_v.assign(lr_init * new_lr_decay)
+            log = f" ** new learning rate: {lr_init * new_lr_decay} (for GAN)"
+            print(log)
+
+        if epoch != 0 and epoch % 100 == 0:
+            G.save_weights(f"./weights/G_{epoch}.h5")
+            D.save_weights(f"./weights/D_{epoch}.h5")
+
+            with summary_writer.as_default():
+                tf.summary.scalar('gen_total_loss', g_loss, epoch)
+                tf.summary.scalar('disc_total_loss', d_loss, epoch)
+                tf.summary.scalar('PSNR', psnr_value, epoch)
+                tf.summary.scalar('SSIM', ssim_value, epoch)
 
 
-# def load_training_data(img_files, ext, number_of_images, train_ratio):
-#     number_of_train_images = int(number_of_images * train_ratio)
-#
-#     files = glob("./lfw-deepfunneled/*/*.jpg")
-#
-#     x_train = files[:number_of_train_images]
-#     x_test = files[number_of_train_images: number_of_images]
-#
-#     x_train =
-def apply_gradient(optimizer, loss_object, model, x, y):
-    with tf.GradientTape() as tape:
-        logits = model(x)
-        loss_value = loss_object(y, logits)
+if __name__ == "__main__":
+    pixel = 250
+    INPUT_SIZE = (pixel // 4, pixel // 4, 3)
+    TARGET_SIZE = (pixel, pixel, 3)
+    BATCH_SIZE = 4
 
-    gradients = tape.gradient(loss_value, model.trainable_weights)
-    optimizer.apply_gradients(zip(gradients, model.trainable_weights))
+    train_img_list = glob("./lfw-deepfunneled/*/*.jpg")
 
-    return logits, loss_value
-
-
-def train_data_for_one_epoch(optimizer, model, train_metric):
-    losses = []
-    pbar = tqdm(total=len(list(enumerate(train))), position=0, leave=True, bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} ')
-    for step, (x_batch_train, y_batch_train) in enumerate(train):
-        logits, loss_value = apply_gradient(optimizer, model, x_batch_train, y_batch_train)
-
-        losses.append(loss_value)
-
-        train_metric(y_batch_train, logits)
-        pbar.set_description("Training loss for step %s: %.4f" % (int(step), float(loss_value)))
-        pbar.update()
-
-    return losses
-
-
-def perform_validation(loss_object, model, val_metric):
-    losses = []
-    for x_val, y_val in val:
-        val_logits = model(x_val)
-        val_loss = loss_object(y_val, val_logits)
-        losses.append(val_loss)
-        val_metric(y_val, val_logits)
-    return losses
-
-
-generator = Generator(INPUT_SIZE)
-# generator.compile(loss=VGGLoss(TARGET_SIZE),
-#                   optimizer=tf.keras.optimizers.Adam(1e-4, beta_1=0.9, beta_2=0.999, epsilon=1e-08))
-discriminator = Discriminator(TARGET_SIZE)
-# discriminator.compile(loss='binary_crossentropy',
-#                       optimizer=tf.keras.optimizers.Adam(1e-4, beta_1=0.9, beta_2=0.999, epsilon=1e-08))
-srgan = get_srgan(INPUT_SIZE, discriminator, generator)
-# srgan.compile(loss=[VGGLoss, 'binary_crossentropy'], loss_weights=[1., 1e-3],
-#               optimizer=tf.keras.optimizers.Adam(1e-4, beta_1=0.9, beta_2=0.999, epsilon=1e-08))
-
-epochs_val_losses, epochs_train_losses = [], []
-
-for epoch in range(20):
-    print(f"Start of epoch {epoch + 1}")
-
-
-
-
-# def train(epochs, batch_size, dataset, model_save_dir, train_ratio):
-#
-#     # train-validation split
-#     data_size = len(train_list)
-#     train_size = int(train_ratio * data_size)
-#     dataset = dataset.shuffle(buffer_size=int(0.25 * data_size))
-#     train_ds = dataset.take(train_size)
-#     val_ds = dataset.skip(train_size)
-#
-#     loss = VGGLoss(TARGET_SIZE)
-#     generator = Generator(INPUT_SIZE)
-#     generator.compile(loss=VGGLoss(TARGET_SIZE),
-#                       optimizer=tf.keras.optimizers.Adam(1e-4, beta_1=0.9, beta_2=0.999, epsilon=1e-08))
-#     discriminator = Discriminator(TARGET_SIZE)
-#     discriminator.compile(loss='binary_crossentropy',
-#                           optimizer=tf.keras.optimizers.Adam(1e-4, beta_1=0.9, beta_2=0.999, epsilon=1e-08))
-#
-#     srgan = get_srgan(INPUT_SIZE, discriminator, generator)
-#     srgan.compile(loss=[VGGLoss, 'binary_crossentropy'], loss_weights=[1., 1e-3],
-#                   optimizer=tf.keras.optimizers.Adam(1e-4, beta_1=0.9, beta_2=0.999, epsilon=1e-08))
-#
-#     for e in range(1, epochs + 1):
-#         print('-' * 15, f'Epoch {e}', '-' * 15)
-#         for _ in range(bat)
+    train(INPUT_SIZE, TARGET_SIZE, train_img_list, BATCH_SIZE,
+          lr_init=1e-4, lr_decay=0.1,
+          n_epoch_init=1, n_epoch=2000)

@@ -50,10 +50,10 @@ if __name__ == "__main__":
 
     # model fit
     weight_path = "./weights/vdsr-test_epochs50.hdf5"
-    log_path = "log\\fit\\" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    log_dir = "logs\\vdsr\\fit\\" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
     model.fit(
         ds.batch(32), epochs=50,
         callbacks=[tf.keras.callbacks.ModelCheckpoint(weight_path, verbose=1, save_best_only=True),
-                   tf.keras.callbacks.TensorBoard(log_path, historam_freq=1)]
+                   tf.keras.callbacks.TensorBoard(log_dir, historam_freq=1)]
     )
