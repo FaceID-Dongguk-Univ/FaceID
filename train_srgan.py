@@ -1,8 +1,18 @@
+# -----
+# author: good-riverdeer
+# An implementation of Photo-Realistic Single Image Super-Resolution Using a Generative Adversarial Network
+# https://arxiv.org/abs/1609.04802
+#
+# This SRGAN training code is based on tensorlayer's srgan.
+# https://github.com/tensorlayer/srgan
+# -----
+
 import tensorflow as tf
 from glob import glob
 import cv2
 import time
 import datetime
+import numpy as np
 
 from networks.resolution.srgan import generator, discriminator
 from metrics import PSNR, SSIM
@@ -79,8 +89,8 @@ def train(input_size, target_size, img_list, batch_size,
 
             grad = tape.gradient(mse_loss, G.trainable_weights)
             g_optimizer_init.apply_gradients(zip(grad, G.trainable_weights))
-            print(f'Epoch: [{epoch}/{n_epoch_init}] step: [{step}/{n_step_epoch}] \\ '
-                  f'time: {time.time() - step_time:.3f}s, mse: {mse_loss:.3f}')
+            print(f"""Epoch: [{epoch}/{n_epoch_init}] step: [{step}/{n_step_epoch}], 
+                  time: {time.time() - step_time:.3f}s, mse: {mse_loss:.3f}""")
 
             with g_init_summary_writer.as_default():
                 tf.summary.scalar('mse_loss', mse_loss, epoch)
@@ -126,11 +136,11 @@ def train(input_size, target_size, img_list, batch_size,
             grad = tape.gradient(d_loss, D.trainable_weights)
             d_optimizer.apply_gradients(zip(grad, D.trainable_weights))
 
-            psnr_value = PSNR(hr_patches, fake_patches)
-            ssim_value = SSIM(hr_patches, fake_patches)
-            print(f"Epoch: [{epoch}/{n_epoch}] step: [{step}/{n_step_epoch}] time: {time.time() - step_time:.3f}s, \\ "
-                  f"g_loss(mse: {mse_loss:.3f}, vgg:{vgg_loss:.3f}, adv: {g_gan_loss: .3f}) d_loss: {d_loss:.3f}, \\ "
-                  f"Metrics: [PSNR: {psnr_value:.3f}, SSIM: {ssim_value:.3f}]")
+            psnr_value = np.mean(PSNR(hr_patches, fake_patches))
+            ssim_value = np.mean(SSIM(hr_patches, fake_patches))
+            print(f"""Epoch: [{epoch}/{n_epoch}] step: [{step}/{n_step_epoch}] time: {time.time() - step_time:.3f}s, 
+                  g_loss(mse: {mse_loss:.3f}, vgg:{vgg_loss:.3f}, adv: {g_gan_loss: .3f}) d_loss: {d_loss:.3f}, 
+                  Metrics: [PSNR: {psnr_value:.3f}, SSIM: {ssim_value:.3f}]""")
 
         if epoch != 0 and epoch % decay_every == 0:
             new_lr_decay = lr_decay ** (epoch // decay_every)
@@ -150,7 +160,7 @@ def train(input_size, target_size, img_list, batch_size,
 
 
 if __name__ == "__main__":
-    pixel = 250
+    pixel = 248
     INPUT_SIZE = (pixel // 4, pixel // 4, 3)
     TARGET_SIZE = (pixel, pixel, 3)
     BATCH_SIZE = 4
