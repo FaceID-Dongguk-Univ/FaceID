@@ -7,28 +7,25 @@ from networks.resolution.vdsr import vdsr
 from metrics import PSNR, SSIM
 
 
+def get_data():
+    for img_path in train_list:
+        try:
+            img = cv2.imread(img_path)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img = img / 255.0
+            resized = cv2.resize(img, INPUT_SIZE[:2])
+            bicubic = cv2.resize(resized, TARGET_SIZE[:2])
+            yield bicubic, img
+        except GeneratorExit:
+            return
+
+
 if __name__ == "__main__":
 
     # prepare dataset
     train_list = glob("./lfw-deepfunneled/*/*.jpg")
     INPUT_SIZE = (100, 100, 3)
     TARGET_SIZE = (250, 250, 3)
-
-
-    def get_data():
-        for img_path in train_list:
-            try:
-                img = cv2.imread(img_path)
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                img = img / 255.0
-                resized = cv2.resize(img, INPUT_SIZE[:2])
-                bicubic = cv2.resize(resized, TARGET_SIZE[:2])
-
-                yield bicubic, img
-
-            except GeneratorExit:
-                return
-
 
     ds = tf.data.Dataset.from_generator(
         get_data,
