@@ -2,3 +2,4 @@ __pycache__/
 /.idea/
 /weights/shape_predictor_68_face_landmarks.dat
 /lfw-deepfunneled
+/lfw-cut
