@@ -2,6 +2,7 @@ import re
 import time
 import dlib
 import cv2
+import yaml
 import numpy as np
 import pytesseract as tess
 
@@ -41,7 +42,7 @@ def crop_face_from_id(cv_image):
         (x, y) = landmark_list[33]
 
         cropped = cv_image.copy()
-        cropped = cropped[y - h: y + h, x - w: x + w]
+        cropped = cropped[y - h//2: y + h//2, x - w//2: x + w//2]
 
         return cropped
 
@@ -113,6 +114,19 @@ def mouth_aspect_ratio(mouth):
     c = distance.euclidean(mouth[12], mouth[16]) # 49, 55
     mar = (a + b) / (2.0 * c)
     return mar
+
+
+def l2_norm(x, axis=1):
+    norm = np.linalg.norm(x, axis=axis, keepdims=True)
+    return x / norm
+
+
+def load_yaml(load_path):
+    """load yaml file"""
+    with open(load_path, 'r') as f:
+        loaded = yaml.load(f, Loader=yaml.Loader)
+
+    return loaded
 
 
 if __name__ == "__main__":

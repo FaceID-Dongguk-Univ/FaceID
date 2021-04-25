@@ -1,172 +1,242 @@
 # -----
 # author: good-riverdeer
-# An implementation of Photo-Realistic Single Image Super-Resolution Using a Generative Adversarial Network
-# https://arxiv.org/abs/1609.04802
+# An implementation of ArcFace: Additive Angular Margin Loss for Deep Face Recognition
+# https://arxiv.org/abs/1801.07698
 #
-# This SRGAN training code is based on tensorlayer's srgan.
-# https://github.com/tensorlayer/srgan
+# This ArcFace code is based on 4uiiurz1's keras-arcface.
+# https://github.com/4uiiurz1/keras-arcface
 # -----
-
+import os
 import tensorflow as tf
-from glob import glob
-import cv2
-import time
-import datetime
 import numpy as np
 
-from networks.resolution.srgan import generator, discriminator
 from metrics import PSNR, SSIM
+from data.dataloader_srgan import DataLoader
+from networks.resolution.srgan import FastSRGAN
+from utils import load_yaml
 
 
-def get_train_data(input_size, target_size, img_list, batch_size):
-    def generator_train():
-        for img in img_list:
-            img = cv2.imread(img)
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            img = img / 175.0
-            img = img - 1.
-            resized = cv2.resize(img, input_size[:2])
-            target = cv2.resize(img, target_size[:2])
-            yield resized, target
-
-    train_ds = tf.data.Dataset.from_generator(
-        generator_train,
-        output_types=(tf.float32, tf.float32),
-        output_shapes=(tf.TensorShape(input_size), tf.TensorShape(target_size))
-    )
-    train_ds = train_ds.shuffle(buffer_size=128)
-    train_ds = train_ds.prefetch(buffer_size=2)
-    train_ds = train_ds.batch(batch_size)
-    return train_ds
-
-
-def train(input_size, target_size, img_list, batch_size,
-          lr_init, lr_decay,
-          n_epoch_init, n_epoch):
+@tf.function
+def pretrain_step(model, x, y):
     """
-    train SRGAN
-    :param input_size: LR images tensor shape
-    :param target_size: SR images tensor shape
-    :param img_list: train images list
-    :param batch_size: batch size
-    :param lr_init: learning rate - Generator's init_train
-    :param lr_decay: learning rate decay ratio
-    :param n_epoch_init: number of epochs - Generator's init_train
-    :param n_epoch: number of epochs - SRGAN
+    Single step of generator pre-training.
+    Args:
+        model: A model object with a tf keras compiled generator.
+        x: The low resolution image tensor.
+        y: The high resolution image tensor.
     """
-    decay_every = int(n_epoch / 2)
+    with tf.GradientTape() as tape:
+        fake_hr = model.generator(x)
+        loss_mse = tf.keras.losses.MeanSquaredError()(y, fake_hr)
 
-    # define model
-    G = generator(input_size)
-    D = discriminator(target_size)
-    vgg = tf.keras.applications.VGG19(include_top=False, weights='imagenet', input_shape=target_size)
-    vgg.trainable = False
-    vgg = tf.keras.Model(inputs=vgg.input, outputs=vgg.get_layer('block5_conv4').output)
-    vgg.trainable = False
+    grads = tape.gradient(loss_mse, model.generator.trainable_variables)
+    model.gen_optimizer.apply_gradients(zip(grads, model.generator.trainable_variables))
 
-    lr_v = tf.Variable(lr_init)
-    g_optimizer_init = tf.keras.optimizers.Adam(lr_v)
-    g_optimizer = tf.keras.optimizers.Adam(lr_v)
-    d_optimizer = tf.keras.optimizers.Adam(lr_v)
-
-    train_ds = get_train_data(input_size, target_size, img_list, batch_size)
-
-    log_dir = "logs\\srgan\\"
-    g_init_summary_writer = tf.summary.create_file_writer(
-        log_dir + "fit_init\\" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
-
-    n_step_epoch = round(n_epoch_init // batch_size)
-    for epoch in range(n_epoch_init):
-        for step, (lr_patches, hr_patches) in enumerate(train_ds.take(n_step_epoch)):
-            if lr_patches.shape[0] != batch_size:
-                break
-            step_time = time.time()
-
-            with tf.GradientTape() as tape:
-                fake_hr_patches = G(lr_patches)
-                mse_loss = tf.reduce_mean(tf.math.squared_difference(hr_patches, fake_hr_patches))
-                mse_loss = tf.reduce_mean(mse_loss)
-
-            grad = tape.gradient(mse_loss, G.trainable_weights)
-            g_optimizer_init.apply_gradients(zip(grad, G.trainable_weights))
-            print(f"""Epoch: [{epoch}/{n_epoch_init}] step: [{step}/{n_step_epoch}], 
-                  time: {time.time() - step_time:.3f}s, mse: {mse_loss:.3f}""")
-
-            with g_init_summary_writer.as_default():
-                tf.summary.scalar('mse_loss', mse_loss, epoch)
-
-    log_dir = "logs\\srgan\\"
-    summary_writer = tf.summary.create_file_writer(
-        log_dir + "fit\\" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
-
-    n_step_epoch = round(n_epoch // batch_size)
-    for epoch in range(n_epoch):
-        for step, (lr_patches, hr_patches) in enumerate(train_ds.take(n_step_epoch)):
-            if lr_patches.shape[0] != batch_size:
-                break
-            step_time = time.time()
-
-            with tf.GradientTape(persistent=True) as tape:
-                fake_patches = G(lr_patches)
-                logits_fake = D(fake_patches)
-                logits_real = D(hr_patches)
-                feature_fake = vgg((fake_patches + 1) / 2.)
-                feature_real = vgg((hr_patches + 1) / 2.)
-
-                d_loss1 = tf.nn.sigmoid_cross_entropy_with_logits(tf.ones_like(logits_real), logits_real)
-                d_loss1 = tf.reduce_mean(d_loss1)
-                d_loss2 = tf.nn.sigmoid_cross_entropy_with_logits(tf.zeros_like(logits_fake), logits_fake)
-                d_loss2 = tf.reduce_mean(d_loss2)
-                d_loss = d_loss1 + d_loss2
-
-                g_gan_loss = 1e-3 * tf.nn.sigmoid_cross_entropy_with_logits(tf.ones_like(logits_fake), logits_fake)
-                g_gan_loss = tf.reduce_mean(g_gan_loss)
-
-                mse_loss = tf.reduce_mean(tf.math.squared_difference(hr_patches, fake_patches))
-                mse_loss = tf.reduce_mean(mse_loss)
-
-                vgg_loss = 2e-6 * tf.reduce_mean(tf.math.squared_difference(feature_real, feature_fake))
-                vgg_loss = tf.reduce_mean(vgg_loss)
-
-                g_loss = mse_loss + vgg_loss + g_gan_loss
-
-            grad = tape.gradient(g_loss, G.trainable_weights)
-            g_optimizer.apply_gradients(zip(grad, G.trainable_weights))
-
-            grad = tape.gradient(d_loss, D.trainable_weights)
-            d_optimizer.apply_gradients(zip(grad, D.trainable_weights))
-
-            psnr_value = np.mean(PSNR(hr_patches, fake_patches))
-            ssim_value = np.mean(SSIM(hr_patches, fake_patches))
-            print(f"""Epoch: [{epoch}/{n_epoch}] step: [{step}/{n_step_epoch}] time: {time.time() - step_time:.3f}s, 
-                  g_loss(mse: {mse_loss:.3f}, vgg:{vgg_loss:.3f}, adv: {g_gan_loss: .3f}) d_loss: {d_loss:.3f}, 
-                  Metrics: [PSNR: {psnr_value:.3f}, SSIM: {ssim_value:.3f}]""")
-
-        if epoch != 0 and epoch % decay_every == 0:
-            new_lr_decay = lr_decay ** (epoch // decay_every)
-            lr_v.assign(lr_init * new_lr_decay)
-            log = f" ** new learning rate: {lr_init * new_lr_decay} (for GAN)"
-            print(log)
-
-        if epoch != 0 and epoch % 100 == 0:
-            G.save_weights(f"./weights/G_{epoch}.h5")
-            D.save_weights(f"./weights/D_{epoch}.h5")
-
-            with summary_writer.as_default():
-                tf.summary.scalar('gen_total_loss', g_loss, epoch)
-                tf.summary.scalar('disc_total_loss', d_loss, epoch)
-                tf.summary.scalar('PSNR', psnr_value, epoch)
-                tf.summary.scalar('SSIM', ssim_value, epoch)
+    return loss_mse
 
 
-if __name__ == "__main__":
-    pixel = 248
-    INPUT_SIZE = (pixel // 4, pixel // 4, 3)
-    TARGET_SIZE = (pixel, pixel, 3)
-    BATCH_SIZE = 4
+def pretrain_generator(model, dataset, writer):
+    """Function that pretrains the generator slightly, to avoid local minima.
+    Args:
+        model: The keras model to train.
+        dataset: A tf dataset object of low and high res images to pretrain over.
+        writer: A summary writer object.
+    Returns:
+        None
+    """
+    with writer.as_default():
+        iteration = 0
+        for _ in range(1):
+            for x, y in dataset:
+                loss = pretrain_step(model, x, y)
+                if iteration % 20 == 0:
+                    print(f"pretrain generator: iterations: {iteration} | MSE Loss: {loss:.4f}")
+                    tf.summary.scalar('MSE Loss', loss, step=tf.cast(iteration, tf.int64))
+                    writer.flush()
+                iteration += 1
 
-    train_img_list = glob("./lfw-deepfunneled/*/*.jpg")
 
-    train(INPUT_SIZE, TARGET_SIZE, train_img_list, BATCH_SIZE,
-          lr_init=1e-4, lr_decay=0.1,
-          n_epoch_init=1, n_epoch=2000)
+@tf.function
+def train_step(model, x, y):
+    """Single train step function for the SRGAN.
+    Args:
+        model: An object that contains a tf keras compiled discriminator model.
+        x: The low resolution input image.
+        y: The desired high resolution output image.
+
+    Returns:
+        d_loss: The mean loss of the discriminator.
+    """
+    # Label smoothing for better gradient flow
+    valid = tf.ones((x.shape[0],) + model.disc_patch)
+    fake = tf.zeros((x.shape[0],) + model.disc_patch)
+
+    with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
+        # From low res. image generate high res. version
+        fake_hr = model.generator(x)
+
+        # Train the discriminators (original images = real / generated = Fake)
+        valid_prediction = model.discriminator(y)
+        fake_prediction = model.discriminator(fake_hr)
+
+        # Generator loss
+        content_loss = model.content_loss(y, fake_hr)
+        adv_loss = 1e-3 * tf.keras.losses.BinaryCrossentropy()(valid, fake_prediction)
+        mse_loss = tf.keras.losses.MeanSquaredError()(y, fake_hr)
+        perceptual_loss = content_loss + adv_loss + mse_loss
+
+        # Discriminator loss
+        valid_loss = tf.keras.losses.BinaryCrossentropy()(valid, valid_prediction)
+        fake_loss = tf.keras.losses.BinaryCrossentropy()(fake, fake_prediction)
+        d_loss = tf.add(valid_loss, fake_loss)
+
+    # Backprop on Generator
+    gen_grads = gen_tape.gradient(perceptual_loss, model.generator.trainable_variables)
+    model.gen_optimizer.apply_gradients(zip(gen_grads, model.generator.trainable_variables))
+
+    # Backprop on Discriminator
+    disc_grads = disc_tape.gradient(d_loss, model.discriminator.trainable_variables)
+    model.disc_optimizer.apply_gradients(zip(disc_grads, model.discriminator.trainable_variables))
+
+    return d_loss, adv_loss, content_loss, mse_loss
+
+
+def train(model, dataset, log_iter, writer, weight_dir):
+    """
+    Function that defines a single training step for the SR-GAN.
+    Args:
+        model: An object that contains tf keras compiled generator and
+               discriminator models.
+        dataset: A tf data object that contains low and high res images.
+        log_iter: Number of iterations after which to add logs in
+                  tensorboard.
+        writer: Summary writer
+        weight_dir: directory to save checkpoints
+    """
+    with writer.as_default():
+        # Iterate over dataset
+        for x, y in dataset:
+            disc_loss, adv_loss, content_loss, mse_loss = train_step(model, x, y)
+            # Log tensorboard summaries if log iteration is reached.
+            if model.iterations % log_iter == 0:
+                print(f"SRGAN training | step: {model.iterations} | adv_loss: {adv_loss:.4f} | content_loss: {content_loss:.4f} | " +
+                      f"mse_loss: {mse_loss:.4f} | disc_loss: {disc_loss:.4f}")
+                tf.summary.scalar('Adversarial Loss', adv_loss, step=model.iterations)
+                tf.summary.scalar('Content Loss', content_loss, step=model.iterations)
+                tf.summary.scalar('MSE Loss', mse_loss, step=model.iterations)
+                tf.summary.scalar('Discriminator Loss', disc_loss, step=model.iterations)
+                tf.summary.image('Low Res', tf.cast(255 * x, tf.uint8), step=model.iterations)
+                tf.summary.image('High Res', tf.cast(255 * (y + 1.0) / 2.0, tf.uint8), step=model.iterations)
+                tf.summary.image('Generated', tf.cast(255 * (model.generator.predict(x) + 1.0) / 2.0, tf.uint8),
+                                 step=model.iterations)
+                # model.generator.save(args['weight_dir'] + f'/generator.h5')
+                # model.discriminator.save(args['weight_dir'] + f'/discriminator.h5')
+                model.generator.save_weights(weight_dir + f'/srgan/generator_{model.iterations}.ckpt')
+                model.discriminator.save_weights(weight_dir + f'/srgan/discriminator_{model.iterations}.ckpt')
+                writer.flush()
+            model.iterations += 1
+
+
+@tf.function
+def validation_step(model, x, y):
+    valid = tf.ones((x.shape[0],) + model.disc_patch)
+    fake = tf.zeros((x.shape[0],) + model.disc_patch)
+
+    fake_hr = model.generator(x)
+
+    valid_prediction = model.discriminator(y)
+    fake_prediction = model.discriminator(fake_hr)
+
+    content_loss = model.content_loss(y, fake_hr)
+    adv_loss = 1e-3 * tf.keras.losses.BinaryCrossentropy()(valid, fake_prediction)
+    mse_loss = tf.keras.losses.MeanSquaredError()(y, fake_hr)
+
+    psnr = PSNR(y, fake_hr)
+    ssim = SSIM(y, fake_hr)
+    psnr = tf.reduce_mean(psnr)
+    ssim = tf.reduce_mean(ssim)
+
+    valid_loss = tf.keras.losses.BinaryCrossentropy()(valid, valid_prediction)
+    fake_loss = tf.keras.losses.BinaryCrossentropy()(fake, fake_prediction)
+    d_loss = tf.add(valid_loss, fake_loss)
+
+    return adv_loss, content_loss, mse_loss, d_loss, psnr, ssim
+
+
+def validation(model, dataset, writer):
+    adv_losses = []
+    content_losses = []
+    mse_losses = []
+    disc_losses = []
+    psnrs = []
+    ssims = []
+
+    for x, y in dataset:
+        adv_loss, content_loss, mse_loss, disc_loss, psnr, ssim = validation_step(model, x, y)
+        adv_losses.append(adv_loss)
+        content_losses.append(content_loss)
+        mse_losses.append(mse_loss)
+        disc_losses.append(disc_loss)
+        psnrs.append(psnr)
+        ssims.append(ssim)
+
+    adv_loss = np.array(adv_losses).mean()
+    content_loss = np.array(content_losses).mean()
+    mse_loss = np.array(mse_losses).mean()
+    disc_loss = np.array(disc_losses).mean()
+    psnr = np.array(psnrs).mean()
+    ssim = np.array(ssims).mean()
+
+    print(f"SRGAN evaluating | adv_loss: {adv_loss:.4f} | content_loss: {content_loss:.4f} | " +
+          f"mse_loss: {mse_loss:.4f} | disc_loss: {disc_loss:.4f} | PSNR: {psnr:.4f} | SSIM: {ssim:.4f}")
+
+    with writer.as_default():
+        tf.summary.scalar('Adversarial Loss', adv_loss, step=model.iterations)
+        tf.summary.scalar('Content Loss', content_loss, step=model.iterations)
+        tf.summary.scalar('MSE Loss', mse_loss, step=model.iterations)
+        tf.summary.scalar('Discriminator Loss', disc_loss, step=model.iterations)
+        tf.summary.scalar('PSNR', psnr, step=model.iterations)
+        tf.summary.scalar('SSIM', ssim, step=model.iterations)
+        tf.summary.image('Low Res', tf.cast(255 * x, tf.uint8), step=model.iterations)
+        tf.summary.image('High Res', tf.cast(255 * (y + 1.0) / 2.0, tf.uint8), step=model.iterations)
+        tf.summary.image('Generated', tf.cast(255 * (model.generator.predict(x) + 1.0) / 2.0, tf.uint8),
+                         step=model.iterations)
+        writer.flush()
+
+
+def main():
+    cfg = load_yaml('configs/srgan.yaml')
+
+    # create directory for saving trained models and logging.
+    if not os.path.exists(cfg['weight_dir']):
+        os.makedirs(cfg['weight_dir'])
+    if not os.path.exists(cfg['log_dir']):
+        os.makedirs(cfg['log_dir'])
+
+    # Create the tensorflow dataset.
+    train_ds = DataLoader(cfg['train_image_dir'], cfg['hr_size']).dataset(cfg['batch_size'])
+    val_ds = DataLoader(cfg['val_image_dir'], cfg['hr_size']).dataset(cfg['batch_size'])
+
+    # Initialize the GAN object.
+    gan = FastSRGAN(cfg)
+
+    # Define the directory for saving pretrainig loss tensorboard summary.
+    model_name = f"srgan-lr{cfg['lr']}-e{cfg['epochs']}-bs{cfg['batch_size']}"
+    pretrain_summary_writer = tf.summary.create_file_writer(cfg['log_dir'] + '/' + model_name + '/pretrain')
+
+    # Run pre-training.
+    pretrain_generator(gan, train_ds, pretrain_summary_writer)
+
+    # Define the directory for saving the SRGAN training tensorbaord summary.
+    train_summary_writer = tf.summary.create_file_writer(cfg['log_dir'] + '/' + model_name + '/train')
+    val_summary_writer = tf.summary.create_file_writer(cfg['log_dir'] + '/' + model_name + '/validation')
+
+    # Run training.
+    for i in range(cfg['epochs']):
+        print(f"EPOCH: {i + 1}")
+        train(gan, train_ds, cfg['save_iter'], train_summary_writer, cfg['weight_dir'])
+        validation(gan, val_ds, val_summary_writer)
+
+
+if __name__ == '__main__':
+    main()
