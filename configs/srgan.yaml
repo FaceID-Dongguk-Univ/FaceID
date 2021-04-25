@@ -6,4 +6,4 @@ hr_size: 112,
 lr: 1e-4,
 save_iter: 1000,
 epochs: 10000,
-batch_size: 16
+batch_size: 32
