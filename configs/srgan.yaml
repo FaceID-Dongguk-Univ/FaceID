@@ -1,9 +1,9 @@
-train_image_dir: 'data/kface_SR',
-val_image_dir: 'data/kface_SR_val',
-log_dir: 'logs',
-weight_dir: 'weights',
-hr_size: 112,
-lr: 1e-4,
-save_iter: 1000,
-epochs: 10000,
+train_image_dir: 'data/kface_SR'
+val_image_dir: 'data/kface_SR_val'
+log_dir: 'logs'
+weight_dir: 'weights'
+hr_size: 112
+lr: 1e-4
+save_iter: 1000
+epochs: 10000
 batch_size: 32
