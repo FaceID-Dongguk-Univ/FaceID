@@ -51,4 +51,4 @@ def main(dataset_path, output_path):
 
 
 if __name__ == "__main__":
-    main("kface", "kface_bin.tfrecord")
+    main("kface", "kface_small_bin.tfrecord")

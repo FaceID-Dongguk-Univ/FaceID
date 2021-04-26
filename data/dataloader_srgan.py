@@ -1,11 +1,11 @@
-# -----
-# author: good-riverdeer
-# An implementation of ArcFace: Additive Angular Margin Loss for Deep Face Recognition
-# https://arxiv.org/abs/1801.07698
-#
-# This ArcFace code is based on 4uiiurz1's keras-arcface.
-# https://github.com/4uiiurz1/keras-arcface
-# -----
+"""
+author: good-riverdeer
+An implementation of ArcFace: Additive Angular Margin Loss for Deep Face Recognition
+https://arxiv.org/abs/1801.07698
+
+This ArcFace code is based on HasnainRaz's Fast-SRGAN.
+https://github.com/HasnainRaz/Fast-SRGAN
+"""
 import tensorflow as tf
 from tensorflow.python.ops import array_ops, math_ops
 from glob import glob
@@ -25,7 +25,7 @@ class DataLoader(object):
             The dataloader object.
         """
         # self.image_paths = [os.path.join(image_dir, x) for x in os.listdir(image_dir)]
-        self.image_paths = glob(image_dir + "/*.jpg")
+        self.image_paths = glob(image_dir + "/*/*.jpg")
         self.image_size = hr_image_size
 
     def _parse_image(self, image_path):

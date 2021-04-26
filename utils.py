@@ -129,6 +129,16 @@ def load_yaml(load_path):
     return loaded
 
 
+def get_ckpt_inf(ckpt_path, steps_per_epoch):
+    """get ckpt information"""
+    split_list = ckpt_path.split('e_')[-1].split('_b_')
+    epochs = int(split_list[0])
+    batchs = int(split_list[-1].split('.ckpt')[0])
+    steps = (epochs - 1) * steps_per_epoch + batchs
+
+    return epochs, steps + 1
+
+
 if __name__ == "__main__":
     # image = cv2.imread("your idcard here")
     image = cv2.imread("resource/idcard.JPG")

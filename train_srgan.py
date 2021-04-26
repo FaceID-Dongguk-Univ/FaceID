@@ -1,11 +1,11 @@
-# -----
-# author: good-riverdeer
-# An implementation of ArcFace: Additive Angular Margin Loss for Deep Face Recognition
-# https://arxiv.org/abs/1801.07698
-#
-# This ArcFace code is based on 4uiiurz1's keras-arcface.
-# https://github.com/4uiiurz1/keras-arcface
-# -----
+"""
+author: good-riverdeer
+An implementation of ArcFace: Additive Angular Margin Loss for Deep Face Recognition
+https://arxiv.org/abs/1801.07698
+
+This ArcFace code is based on HasnainRaz's Fast-SRGAN.
+https://github.com/HasnainRaz/Fast-SRGAN
+"""
 import os
 import tensorflow as tf
 import numpy as np

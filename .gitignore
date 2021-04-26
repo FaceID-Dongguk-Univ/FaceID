@@ -1,5 +1,9 @@
-__pycache__/
-/.idea/
-/weights/shape_predictor_68_face_landmarks.dat
-/lfw-deepfunneled
-/lfw-cut
+__pycache__
+.idea
+data/kface
+data/kface_val
+data/kface_val_npy
+data/kface_bin.tfrecord
+data/kface_small_bin.tfrecord
+data/Middle_Resolution.zip
+weights
