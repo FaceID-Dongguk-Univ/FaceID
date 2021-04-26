@@ -1,5 +1,5 @@
-train_image_dir: 'data/kface_SR'
-val_image_dir: 'data/kface_SR_val'
+train_image_dir: 'data/kface'
+val_image_dir: 'data/kface_val'
 log_dir: 'logs'
 weight_dir: 'weights'
 hr_size: 112

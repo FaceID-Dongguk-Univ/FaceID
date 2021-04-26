@@ -109,9 +109,9 @@ def eye_aspect_ratio(eye):
 
 
 def mouth_aspect_ratio(mouth):
-    a = distance.euclidean(mouth[14], mouth[18]) # 51, 59
-    b = distance.euclidean(mouth[4], mouth[8]) # 53, 57
-    c = distance.euclidean(mouth[12], mouth[16]) # 49, 55
+    a = distance.euclidean(mouth[14], mouth[18])    # 51, 59
+    b = distance.euclidean(mouth[4], mouth[8])      # 53, 57
+    c = distance.euclidean(mouth[12], mouth[16])    # 49, 55
     mar = (a + b) / (2.0 * c)
     return mar
 

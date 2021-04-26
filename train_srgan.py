@@ -129,10 +129,10 @@ def train(model, dataset, log_iter, writer, weight_dir):
                 tf.summary.image('High Res', tf.cast(255 * (y + 1.0) / 2.0, tf.uint8), step=model.iterations)
                 tf.summary.image('Generated', tf.cast(255 * (model.generator.predict(x) + 1.0) / 2.0, tf.uint8),
                                  step=model.iterations)
-                # model.generator.save(args['weight_dir'] + f'/generator.h5')
-                # model.discriminator.save(args['weight_dir'] + f'/discriminator.h5')
-                model.generator.save_weights(weight_dir + f'/srgan/generator_{model.iterations}.ckpt')
-                model.discriminator.save_weights(weight_dir + f'/srgan/discriminator_{model.iterations}.ckpt')
+                model.generator.save(os.path.join(weight_dir, 'generator.h5'))
+                model.discriminator.save(os.path.join(weight_dir, 'discriminator.h5'))
+                # model.generator.save_weights(weight_dir + f'/srgan/generator_{model.iterations}.ckpt')
+                # model.discriminator.save_weights(weight_dir + f'/srgan/discriminator_{model.iterations}.ckpt')
                 writer.flush()
             model.iterations += 1
 
@@ -222,14 +222,17 @@ def main():
 
     # Define the directory for saving pretrainig loss tensorboard summary.
     model_name = f"srgan-lr{cfg['lr']}-e{cfg['epochs']}-bs{cfg['batch_size']}"
-    pretrain_summary_writer = tf.summary.create_file_writer(cfg['log_dir'] + '/' + model_name + '/pretrain')
+    pretrain_summary_writer = tf.summary.create_file_writer(
+        os.path.join(cfg['log_dir'], model_name, 'pretrain'))
 
     # Run pre-training.
     pretrain_generator(gan, train_ds, pretrain_summary_writer)
 
     # Define the directory for saving the SRGAN training tensorbaord summary.
-    train_summary_writer = tf.summary.create_file_writer(cfg['log_dir'] + '/' + model_name + '/train')
-    val_summary_writer = tf.summary.create_file_writer(cfg['log_dir'] + '/' + model_name + '/validation')
+    train_summary_writer = tf.summary.create_file_writer(
+        os.path.join(cfg['log_dir'], model_name, 'train'))
+    val_summary_writer = tf.summary.create_file_writer(
+        os.path.join(cfg['log_dir'], model_name, 'validation'))
 
     # Run training.
     for i in range(cfg['epochs']):
