@@ -1,12 +1,11 @@
-# -----
-# author: good-riverdeer
-# An implementation of VDSR (Super-resolution using very deep convolutional networks)
-# https://openaccess.thecvf.com/content_cvpr_2016/html/Kim_Accurate_Image_Super-Resolution_CVPR_2016_paper.html
-#
-# This VDSR code is based on GeorgeSeif's VDSR-Keras.
-# https://github.com/GeorgeSeif/VDSR-Keras
-# -----
+"""
+author: good-riverdeer
+An implementation of VDSR (Super-resolution using very deep convolutional networks)
+https://openaccess.thecvf.com/content_cvpr_2016/html/Kim_Accurate_Image_Super-Resolution_CVPR_2016_paper.html
 
+This VDSR code is based on GeorgeSeif's VDSR-Keras.
+https://github.com/GeorgeSeif/VDSR-Keras
+"""
 import tensorflow as tf
 
 

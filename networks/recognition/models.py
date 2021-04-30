@@ -1,12 +1,11 @@
-# -----
-# author: good-riverdeer
-# An implementation of ArcFace: Additive Angular Margin Loss for Deep Face Recognition
-# https://arxiv.org/abs/1801.07698
-#
-# This ArcFace code is peteryuX's arcface-tf2.
-# https://github.com/peteryuX/arcface-tf2
-# -----
+"""
+author: good-riverdeer
+An implementation of ArcFace: Additive Angular Margin Loss for Deep Face Recognition
+https://arxiv.org/abs/1801.07698
 
+This ArcFace code is peteryuX's arcface-tf2.
+https://github.com/peteryuX/arcface-tf2
+"""
 import tensorflow as tf
 from tensorflow.keras import Model
 from tensorflow.keras.layers import (

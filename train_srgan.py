@@ -197,10 +197,10 @@ def validation(model, dataset, writer):
         tf.summary.scalar('Discriminator Loss', disc_loss, step=model.iterations)
         tf.summary.scalar('PSNR', psnr, step=model.iterations)
         tf.summary.scalar('SSIM', ssim, step=model.iterations)
-        tf.summary.image('Low Res', tf.cast(255 * x, tf.uint8), step=model.iterations)
-        tf.summary.image('High Res', tf.cast(255 * (y + 1.0) / 2.0, tf.uint8), step=model.iterations)
-        tf.summary.image('Generated', tf.cast(255 * (model.generator.predict(x) + 1.0) / 2.0, tf.uint8),
-                         step=model.iterations)
+        # tf.summary.image('Low Res', tf.cast(255 * x, tf.uint8), step=model.iterations)
+        # tf.summary.image('High Res', tf.cast(255 * (y + 1.0) / 2.0, tf.uint8), step=model.iterations)
+        # tf.summary.image('Generated', tf.cast(255 * (model.generator.predict(x) + 1.0) / 2.0, tf.uint8),
+        #                  step=model.iterations)
         writer.flush()
 
 

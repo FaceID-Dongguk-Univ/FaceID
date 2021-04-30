@@ -43,12 +43,7 @@ def unzip():
             zipfile.ZipFile(z).extract("S001/" + t)
         shutil.move("S001", "MR/" + c)
 
-        # if not os.path.exists("kface_SR"):
-        #     os.makedirs("kface_SR")
-        # if not os.path.exists("kface_SR_val"):
-        #     os.makedirs("kface_SR_val")
-
-    # --- crop ---
+    # crop
     for j, c in enumerate(class_names):
 
         imgs = glob("MR/" + c + "/*/*/*/*.jpg")
@@ -70,49 +65,43 @@ def unzip():
                     if not os.path.exists(base_val):
                         os.makedirs(base_val)
                     Image.fromarray(img).save(os.path.join(base_val, str(j-390) + '_' + name) + '.jpg')
-                    # Image.fromarray(img).save("kface_SR_val/" + str(j-390) + '_' + name + '.jpg')
                 else:
                     base = "kface/" + str(j)
 
                     if not os.path.exists(base):
                         os.makedirs(base)
                     Image.fromarray(img).save(os.path.join(base, str(j) + '_' + name) + '.jpg')
-                    # Image.fromarray(img).save("kface_SR/" + str(j) + '_' + name + '.jpg')
 
 
 def make_pair_numpy():
-    total_list = glob("kface_val/*/*.jpg")
-
-    ref_list = []
-    for i in range(10):
-        img_name = np.random.randint(24)
-        ref_list.append(os.path.join("kface_val", f"{i}", f"{i}_{img_name}.jpg"))
-
-    query_list = total_list.copy()
-    for i in ref_list:
-        query_list.remove(i)
-
     ref_imgs = []
     query_imgs = []
     is_same = []
-    classes = np.arange(10)
 
-    for class_id, ref_img in enumerate(ref_list):
-        base = "kface_val"
-        for i in range(40):
-            ref_imgs.append(np.array(Image.open(ref_img).resize((112, 112)), dtype=np.uint8))
+    with open("data/references.csv", 'w', encoding='utf-8') as f:
+        f.write("references, queries, is_same\n")
+        for _ in range(400):
+            classes = os.listdir("kface_val")
 
-        for i in range(20):
-            same_num = str(np.random.randint(24))
-            same_img = os.path.join(base, f'{class_id}', f'{class_id}_{same_num}.jpg')
-            query_imgs.append(np.array(Image.open(same_img).resize((112, 112)), dtype=np.uint8))
-            is_same.append(1)
+            ref_number = np.random.randint(24)
+            ref_class = np.random.choice(classes)
+            ref_name = os.path.join("kface_val", ref_class, f"{ref_class}_{str(ref_number)}.jpg")
+            f.write(f"{os.path.basename(ref_name)}, ")
+            ref_imgs.append(np.array(Image.open(ref_name).resize((112, 112)), dtype=np.uint8))
 
-            dif_num = str(np.random.randint(24))
-            another_class_id = np.random.choice(np.delete(classes, class_id))
-            dif_img = os.path.join(base, f'{another_class_id}', f'{another_class_id}_{dif_num}.jpg')
-            query_imgs.append(np.array(Image.open(dif_img).resize((112, 112)), dtype=np.uint8))
-            is_same.append(0)
+            is_pair = np.random.randint(2)
+            query_number = np.random.randint(24)
+            if is_pair:
+                is_same.append(1)
+                query_name = os.path.join("kface_val", ref_class, f"{ref_class}_{str(query_number)}.jpg")
+            else:
+                is_same.append(0)
+                classes.remove(ref_class)
+                query_class = np.random.choice(classes)
+                query_name = os.path.join("kface_val", query_class, f"{query_class}_{str(query_number)}.jpg")
+
+            f.write(f"{os.path.basename(query_name)}, {is_pair}\n")
+            query_imgs.append(np.array(Image.open(query_name).resize((112, 112)), dtype=np.uint8))
 
     ref_imgs = np.array(ref_imgs, dtype=np.uint8)
     query_imgs = np.array(query_imgs, dtype=np.uint8)

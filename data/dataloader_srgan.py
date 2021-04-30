@@ -26,7 +26,7 @@ class DataLoader(object):
             The dataloader object.
         """
         # self.image_paths = [os.path.join(image_dir, x) for x in os.listdir(image_dir)]
-        self.image_paths = glob(os.path.join(image_dir, "/*/*.jpg"))
+        self.image_paths = glob(os.path.join(image_dir, "*/*.jpg"))
         self.image_size = hr_image_size
 
     def _parse_image(self, image_path):

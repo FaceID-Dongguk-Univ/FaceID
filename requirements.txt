@@ -1,6 +1,0 @@
-tensorflow-gpu==2.1.0
-PyYAML
-imutils
-dlib
-pytesseract
-tqdm

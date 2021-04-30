@@ -1,11 +1,11 @@
-# -----
-# author: good-riverdeer
-# An implementation of Photo-Realistic Single Image Super-Resolution Using a Generative Adversarial Network
-# https://arxiv.org/abs/1609.04802
-#
-# This SRGAN code is based on HasnainRaz's Fast-SRGAN.
-# https://github.com/HasnainRaz/Fast-SRGAN
-# -----
+"""
+author: good-riverdeer
+An implementation of Photo-Realistic Single Image Super-Resolution Using a Generative Adversarial Network
+https://arxiv.org/abs/1609.04802
+
+This SRGAN code is based on HasnainRaz's Fast-SRGAN.
+https://github.com/HasnainRaz/Fast-SRGAN
+"""
 import tensorflow as tf
 
 

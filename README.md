@@ -15,7 +15,6 @@ tesseract v5.0.0-alpha.20201127
 ``` 
 
 ### requirements
-- `pip install -r requirements.txt`
 - dlib's weight file
   - visit http://dlib.net/files/
   - download `shape_predictor_68_face_landmarks.dat.bz2`

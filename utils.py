@@ -51,10 +51,11 @@ def crop_face_from_id(cv_image):
 
 
 def get_idnum(cv_image):
+    """extract birth year from id card by Tesseract"""
+    tess.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    config = ("-l kor+eng --oem 3 --psm 4 -c preserve_interword_spaces=1")
+    text = tess.image_to_string(cv_image, config=config)
     try:
-        tess.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-        config = ("-l kor+eng --oem 3 --psm 4 -c preserve_interword_spaces=1")
-        text = tess.image_to_string(cv_image, config=config)
         text = re.compile(r"\d{6}-\d{7}").search(text).group()
         text = text.replace('-', '')
             
@@ -119,6 +120,15 @@ def mouth_aspect_ratio(mouth):
 def l2_norm(x, axis=1):
     norm = np.linalg.norm(x, axis=axis, keepdims=True)
     return x / norm
+
+
+def get_embeddings(recognition_model, img):
+    img = cv2.resize(img, (112, 112))
+    img = img / 255.
+    if len(img.shape) == 3:
+        img = np.expand_dims(img, axis=0)
+    embeds = l2_norm(recognition_model(img))
+    return embeds
 
 
 def load_yaml(load_path):
