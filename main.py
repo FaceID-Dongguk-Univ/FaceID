@@ -123,10 +123,11 @@ def main(detector, predictor, recognition_model, sr_id_cropped):
             h = landmark_list[8][1] - landmark_list[27][1]
             w = landmark_list[16][0] - landmark_list[0][0]
             (x, y) = landmark_list[33]
-            cv2.rectangle(frame, (x-w//2, y+h//2), (x+w//2, y-h//2), (0, 0, 255), 3)
+            cv2.rectangle(frame, (x - int(w * 0.75), y + h // 2), (x + int(w * 0.75), y - int(h * 1.5)),
+                          (0, 0, 255), 3)
 
             # cropped = cropped.copy()
-            cropped = cropped[y - h//2: y + h//2, x - w//2: x + w//2]
+            cropped = cropped[y - int(h * 1.25): y + h//2, x - int(w * 0.75): x + int(w * 0.75)]
 
             is_human, frame, human_counter = human_test(is_human, task, landmarks, frame, human_counter)
             if is_human:
@@ -148,7 +149,7 @@ def main(detector, predictor, recognition_model, sr_id_cropped):
         # embeds_distance = cosine_similarity(id_embeds[0], cam_embeds[0])
         embeds_distance = np.subtract(id_embeds, cam_embeds)
         embeds_distance = np.sum(np.square(embeds_distance), axis=1)
-        print(f"[INFO] Similarity: {embeds_distance[0]:.4f}")
+        print(f"[INFO] Embeddings Distance: {embeds_distance[0]:.4f}")
 
         if embeds_distance < recog_thresh:
             print("[INFO] Thank you")

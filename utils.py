@@ -26,7 +26,7 @@ def crop_face_from_id(cv_image):
     img_gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
 
     face_detector = detector(img_gray, 1)
-    print("The number of faces detected : {}".format(len(face_detector)))
+    # print("The number of faces detected : {}".format(len(face_detector)))
 
     if len(face_detector) == 1:
         face = face_detector[0]
@@ -42,7 +42,7 @@ def crop_face_from_id(cv_image):
         (x, y) = landmark_list[33]
 
         cropped = cv_image.copy()
-        cropped = cropped[y - h//2: y + h//2, x - w//2: x + w//2]
+        cropped = cropped[y - int(h * 1.25): y + h//2, x - int(w * 0.75): x + int(w * 0.75)]
 
         return cropped
 
@@ -151,20 +151,21 @@ def get_ckpt_inf(ckpt_path, steps_per_epoch):
 
 if __name__ == "__main__":
     # image = cv2.imread("your idcard here")
-    image = cv2.imread("resource/idcard.JPG")
-    # image = cv2.imread("resource/license.jpg")
+    image = cv2.imread("ids/ygs.jpg")
+    # image = cv2.imread("faces/ygs_face.jpg")
 
     # get ID number
     id_num = get_idnum(image)
-    print(id_num)
+    print("주민등록번호: ", id_num)
 
     # check ID number
-    print(is_verified_idnum(image))
+    # print(is_verified_idnum(image))
 
     # check age
-    print(is_verified_age(image))
+    # print(is_verified_age(image))
 
     # crop face from ID card
-    result = crop_face_from_id(image)
-    cv2.imshow("result", result)
-    cv2.waitKey(0)
+    # result = crop_face_from_id(image)
+    # cv2.imshow("result", result)
+    # cv2.imwrite("ids/ush_cropped.jpg", result)
+    # cv2.waitKey(0)

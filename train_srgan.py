@@ -16,7 +16,7 @@ from networks.resolution.srgan import FastSRGAN
 from utils import load_yaml
 
 
-@tf.function
+# @tf.function
 def pretrain_step(model, x, y):
     """
     Single step of generator pre-training.
@@ -56,7 +56,7 @@ def pretrain_generator(model, dataset, writer):
                 iteration += 1
 
 
-@tf.function
+# @tf.function
 def train_step(model, x, y):
     """Single train step function for the SRGAN.
     Args:
@@ -129,15 +129,15 @@ def train(model, dataset, log_iter, writer, weight_dir):
                 tf.summary.image('High Res', tf.cast(255 * (y + 1.0) / 2.0, tf.uint8), step=model.iterations)
                 tf.summary.image('Generated', tf.cast(255 * (model.generator.predict(x) + 1.0) / 2.0, tf.uint8),
                                  step=model.iterations)
-                model.generator.save(os.path.join(weight_dir, 'generator.h5'))
-                model.discriminator.save(os.path.join(weight_dir, 'discriminator.h5'))
-                # model.generator.save_weights(weight_dir + f'/srgan/generator_{model.iterations}.ckpt')
-                # model.discriminator.save_weights(weight_dir + f'/srgan/discriminator_{model.iterations}.ckpt')
+                # model.generator.save(os.path.join(weight_dir, 'generator.h5'))
+                # model.discriminator.save(os.path.join(weight_dir, 'discriminator.h5'))
+                model.generator.save_weights(weight_dir + f'/srgan/generator/g_{model.iterations}.ckpt')
+                model.discriminator.save_weights(weight_dir + f'/srgan/discriminator/d_{model.iterations}.ckpt')
                 writer.flush()
             model.iterations += 1
 
 
-@tf.function
+# @tf.function
 def validation_step(model, x, y):
     valid = tf.ones((x.shape[0],) + model.disc_patch)
     fake = tf.zeros((x.shape[0],) + model.disc_patch)
@@ -221,11 +221,10 @@ def main():
     gan = FastSRGAN(cfg)
 
     # Define the directory for saving pretrainig loss tensorboard summary.
-    model_name = f"srgan-lr{cfg['lr']}-e{cfg['epochs']}-bs{cfg['batch_size']}"
-    pretrain_summary_writer = tf.summary.create_file_writer(
-        os.path.join(cfg['log_dir'], model_name, 'pretrain'))
+    model_name = f"srgan-lr{cfg['lr']}-bs{cfg['batch_size']}"
 
     # Run pre-training.
+    pretrain_summary_writer = tf.summary.create_file_writer(os.path.join(cfg['log_dir'], model_name, 'pretrain'))
     pretrain_generator(gan, train_ds, pretrain_summary_writer)
 
     # Define the directory for saving the SRGAN training tensorbaord summary.
@@ -241,5 +240,41 @@ def main():
         validation(gan, val_ds, val_summary_writer)
 
 
+def ongoing(start_epoch):
+
+    # create directory for saving trained models and logging.
+    if not os.path.exists(cfg['weight_dir']):
+        os.makedirs(cfg['weight_dir'])
+    if not os.path.exists(cfg['log_dir']):
+        os.makedirs(cfg['log_dir'])
+
+    # Create the tensorflow dataset.
+    train_ds = DataLoader(cfg['train_image_dir'], cfg['hr_size']).dataset(cfg['batch_size'])
+    val_ds = DataLoader(cfg['val_image_dir'], cfg['hr_size']).dataset(cfg['batch_size'])
+
+    # Initialize the GAN object.
+    gan = FastSRGAN(args)
+    gen_ckpt_path = tf.train.latest_checkpoint(cfg['weight_dir'] + '/srgan/generator')
+    dis_ckpt_path = tf.train.latest_checkpoint(cfg['weight_dir'] + '/srgan/discriminator')
+    gan.generator.load_weights(gen_ckpt_path)
+    gan.discriminator.load_weights(dis_ckpt_path)
+    gan.iterations = int(gen_ckpt_path.split('g_')[-1].split('.')[0]) + 1
+
+    # Define the directory for saving pretrainig loss tensorboard summary.
+    model_name = f"srgan-lr{cfg['lr']}-bs{cfg['batch_size']}"
+
+    # Define the directory for saving the SRGAN training tensorbaord summary.
+    train_summary_writer = tf.summary.create_file_writer(cfg['log_dir'] + '/' + model_name + '/train')
+    val_summary_writer = tf.summary.create_file_writer(cfg['log_dir'] + '/' + model_name + '/validation')
+
+    # Run training.
+    for i in range(start_epoch, cfg['epochs']):
+        print(f"EPOCH: {i + 1}")
+        train(gan, train_ds, cfg['save_iter'], train_summary_writer)
+        validation(gan, val_ds, cfg['save_iter'], val_summary_writer)
+
+
 if __name__ == '__main__':
     main()
+
+    # ongoing(_)
