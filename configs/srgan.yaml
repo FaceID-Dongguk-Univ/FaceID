@@ -4,6 +4,6 @@ log_dir: 'logs'
 weight_dir: 'weights'
 hr_size: 112
 lr: !!float 1e-4
-save_iter: 150
-epochs: 10000
+save_iter: 300
+epochs: 50 # 10000
 batch_size: 32
