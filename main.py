@@ -7,14 +7,8 @@ from imutils import face_utils
 from imutils.video import VideoStream
 
 from networks.recognition.models import ArcFaceModel
-from utils import (
-    is_verified_idnum, is_verified_age, eye_aspect_ratio, mouth_aspect_ratio, get_embeddings
-)
-
-# ap = argparse.ArgumentParser()
-# ap.add_argument("-i", "--idfile", type=str,
-#                 help="id card image path")
-# args = vars(ap.parse_args())
+from utils import (is_verified_age, eye_aspect_ratio, mouth_aspect_ratio,
+                   get_embeddings, crop_face_from_id)
 
 
 def human_test(is_human, task, landmarks, img, counter):
@@ -22,13 +16,6 @@ def human_test(is_human, task, landmarks, img, counter):
     (l_start, l_end) = face_utils.FACIAL_LANDMARKS_IDXS["left_eye"]
     (r_start, r_end) = face_utils.FACIAL_LANDMARKS_IDXS["right_eye"]
     (mouth_start, mouth_end) = face_utils.FACIAL_LANDMARKS_IDXS["mouth"]
-    # eye_counter = 0
-    # mouth_counter = 0
-    # smile_counter = 0
-    # is_eyes_closed = False
-    # is_mouth_open = False
-    # is_smiling = False
-    # is_human = False
     eye_ar_thresh = 0.3
     mouth_ar_thresh = 0.6
     smile_ar_thresh = 0.2
@@ -43,7 +30,6 @@ def human_test(is_human, task, landmarks, img, counter):
         left_ear = eye_aspect_ratio(left_eye)
         right_ear = eye_aspect_ratio(right_eye)
         ear = (left_ear + right_ear) / 2.0
-        # print("ear: ", ear)
 
         if ear < eye_ar_thresh:
             counter += 1
@@ -52,12 +38,10 @@ def human_test(is_human, task, landmarks, img, counter):
                 is_human = True
         else:
             eye_counter = 0
-            # is_human = False
 
     elif task == 2:
         in_mouth = landmarks[mouth_start: mouth_end]
         mar = mouth_aspect_ratio(in_mouth)
-        # print("mar: ", mar)
 
         if mar > mouth_ar_thresh:
             counter += 1
@@ -66,12 +50,10 @@ def human_test(is_human, task, landmarks, img, counter):
                 is_human = True
         else:
             counter = 0
-            # is_human = False
 
     else:
         in_mouth = landmarks[mouth_start: mouth_end]
         mar = mouth_aspect_ratio(in_mouth)
-        # print("mar: ", mar)
 
         if mar < smile_ar_thresh:
             counter += 1
@@ -80,7 +62,6 @@ def human_test(is_human, task, landmarks, img, counter):
                 is_human = True
         else:
             counter = 0
-            # is_human = False
 
     return is_human, img, counter
 
@@ -90,18 +71,18 @@ def main(detector, predictor, recognition_model, sr_id_cropped):
     human_counter = 0
     is_human = False
     task = np.random.randint(1, 4)
-    recog_thresh = 1.27
+    recog_thresh = 1.36
 
     print("[INFO] starting video stream...")
     vs = VideoStream(src=0).start()
     time.sleep(2)
 
     if task == 1:
-        print("[INFO] *** Please close your eyes ***")
+        order_text = "[INFO] *** Please close your eyes ***"
     elif task == 2:
-        print("[INFO] *** Please open your mouth ***")
+        order_text = "[INFO] *** Please open your mouth ***"
     else:
-        print("[INFO] *** Please smile for me ***")
+        order_text = "[INFO] *** Please smile for me ***"
     print("*** If you passed \"Human Test\", press \'s\' button and take a picture ***")
 
     while True:
@@ -130,8 +111,9 @@ def main(detector, predictor, recognition_model, sr_id_cropped):
             cropped = cropped[y - int(h * 1.25): y + h//2, x - int(w * 0.75): x + int(w * 0.75)]
 
             is_human, frame, human_counter = human_test(is_human, task, landmarks, frame, human_counter)
+            cv2.putText(frame, order_text, (10, 200), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
             if is_human:
-                cv2.putText(frame, "You're Human, thank you", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                cv2.putText(frame, "You're Human, thank you", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
         cv2.imshow("Frame", frame)
         key = cv2.waitKey(1)
@@ -146,24 +128,22 @@ def main(detector, predictor, recognition_model, sr_id_cropped):
     if is_human:
         id_embeds = get_embeddings(recognition_model, sr_id_cropped)
         cam_embeds = get_embeddings(recognition_model, cropped)
-        # embeds_distance = cosine_similarity(id_embeds[0], cam_embeds[0])
         embeds_distance = np.subtract(id_embeds, cam_embeds)
         embeds_distance = np.sum(np.square(embeds_distance), axis=1)
-        print(f"[INFO] Embeddings Distance: {embeds_distance[0]:.4f}")
+        print(f"[INFO] Embeddings Distance: {embeds_distance[0]:.4f} | Threshold: {recog_thresh}")
 
         if embeds_distance < recog_thresh:
-            print("[INFO] Thank you")
+            print("[INFO] (1: Pass) Thank you")
         else:
-            print("[INFO] Try again")
+            print("[INFO] (0: Fail) Try again")
 
     else:
         print("[INFO] Try again")
 
 
 if __name__ == "__main__":
-    # LR_SHAPE = (100 // 4, 100 // 4, 3)
-    # INPUT_SHAPE = (100, 100, 3)
-    # N_CLASSES = 5749
+    # LR_SHAPE = (112 // 2, 112 // 2, 3)
+    # INPUT_SHAPE = (112, 112, 3)
 
     print("[INFO] loading face detector weights...")
     main_detector = dlib.get_frontal_face_detector()
@@ -171,8 +151,8 @@ if __name__ == "__main__":
 
     print("[INFO] loading face recognition weights...")
     arcface = ArcFaceModel(size=112, backbone_type='ResNet50', training=False)
-    ckpt_path = tf.train.latest_checkpoint('weights/arc_res50_kface_finetune-lr0.001-bs128-trainable2')
-    arcface.load_weights(ckpt_path)#, options=tf.train.Checkpoint())
+    ckpt_path = tf.train.latest_checkpoint('weights/arc_res50_kface_finetune_20K-lr0.001-bs128-epochs50')
+    arcface.load_weights(ckpt_path)
 
     # resolution_model =
     print("[INFO] System ready!")
@@ -184,16 +164,19 @@ if __name__ == "__main__":
             break
 
         print("[INFO] Verifying ID card...")
+        start = time.time()
         id_image = cv2.imread(file_name)
 
-        if is_verified_idnum(id_image) and is_verified_age(id_image):
-            # sr_id_cropped = crop_face_from_id(id_image)
+        # if is_verified_idnum(id_image) and is_verified_age(id_image):
+        if is_verified_age(id_image):
+            sr_id_cropped = crop_face_from_id(id_image)
             # sr_id_cropped = cv2.resize(sr_id_cropped, LR_SHAPE)
             # sr_id_cropped = resolution_model(sr_id_cropped)
 
             print("[INFO] Your ID card is verified")
-            main(main_detector, main_predictor, arcface, id_image)
+            main(main_detector, main_predictor, arcface, sr_id_cropped)
 
         else:
             print("[INFO] Invalid ID card!")
 
+        print(f"[INFO] Time elapsed: {time.time() - start: .4f} sec")

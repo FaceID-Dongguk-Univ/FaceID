@@ -241,6 +241,7 @@ def main():
 
 
 def ongoing(start_epoch):
+    cfg = load_yaml('configs/srgan.yaml')
 
     # create directory for saving trained models and logging.
     if not os.path.exists(cfg['weight_dir']):
@@ -253,9 +254,10 @@ def ongoing(start_epoch):
     val_ds = DataLoader(cfg['val_image_dir'], cfg['hr_size']).dataset(cfg['batch_size'])
 
     # Initialize the GAN object.
-    gan = FastSRGAN(args)
+    gan = FastSRGAN(cfg)
     gen_ckpt_path = tf.train.latest_checkpoint(cfg['weight_dir'] + '/srgan/generator')
     dis_ckpt_path = tf.train.latest_checkpoint(cfg['weight_dir'] + '/srgan/discriminator')
+
     gan.generator.load_weights(gen_ckpt_path)
     gan.discriminator.load_weights(dis_ckpt_path)
     gan.iterations = int(gen_ckpt_path.split('g_')[-1].split('.')[0]) + 1
@@ -271,10 +273,8 @@ def ongoing(start_epoch):
     for i in range(start_epoch, cfg['epochs']):
         print(f"EPOCH: {i + 1}")
         train(gan, train_ds, cfg['save_iter'], train_summary_writer)
-        validation(gan, val_ds, cfg['save_iter'], val_summary_writer)
+        validation(gan, val_ds, val_summary_writer)
 
 
 if __name__ == '__main__':
     main()
-
-    # ongoing(_)

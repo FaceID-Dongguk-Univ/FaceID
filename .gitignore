@@ -5,6 +5,8 @@ data/kface_val
 data/kface_val_npy
 data/kface_bin.tfrecord
 data/Middle_Resolution.zip
-faces
-ids
+data/faces
+data/ids
 weights
+logs
+resource

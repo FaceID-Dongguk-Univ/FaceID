@@ -1,4 +1,5 @@
 import re
+import os
 import time
 import dlib
 import cv2
@@ -8,25 +9,14 @@ import pytesseract as tess
 
 from scipy.spatial import distance
 
-# ALL = list(range(0, 68))
-# RIGHT_EYEBROW = list(range(17, 22))
-# LEFT_EYEBROW = list(range(22, 27))
-# RIGHT_EYE = list(range(36, 42))
-# LEFT_EYE = list(range(42, 48))
-# NOSE = list(range(27, 36))
-# MOUTH_OUTLINE = list(range(48, 61))
-# MOUTH_INNER = list(range(61, 68))
-# JAWLINE = list(range(0, 17))
 
-
-def crop_face_from_id(cv_image):
+def crop_face_from_id(cv_image, weight_path="weights"):
     detector = dlib.get_frontal_face_detector()
-    predictor = dlib.shape_predictor('weights/shape_predictor_68_face_landmarks.dat')
+    predictor = dlib.shape_predictor(os.path.join(weight_path, 'shape_predictor_68_face_landmarks.dat'))
 
     img_gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
 
     face_detector = detector(img_gray, 1)
-    # print("The number of faces detected : {}".format(len(face_detector)))
 
     if len(face_detector) == 1:
         face = face_detector[0]
@@ -36,7 +26,6 @@ def crop_face_from_id(cv_image):
         landmark_list = []
         for p in landmarks.parts():
             landmark_list.append([p.x, p.y])
-            # cv2.circle(image, (p.x, p.y), 2, (0, 255, 0), -1)
         h = landmark_list[8][1] - landmark_list[27][1]
         w = landmark_list[16][0] - landmark_list[0][0]
         (x, y) = landmark_list[33]
@@ -56,8 +45,8 @@ def get_idnum(cv_image):
     config = ("-l kor+eng --oem 3 --psm 4 -c preserve_interword_spaces=1")
     text = tess.image_to_string(cv_image, config=config)
     try:
-        text = re.compile(r"\d{6}-\d{7}").search(text).group()
-        text = text.replace('-', '')
+        text = re.compile(r"\d{6}").search(text).group()
+        # text = text.replace('-', '')
             
         return text
     
@@ -86,10 +75,11 @@ def is_verified_age(image):
     try:
         id_num = get_idnum(image)
         year_curr = int(time.strftime('%Y', time.localtime(time.time())))
-        if id_num[6] == '1' or id_num[6] == '2':
-            year_birth = int(id_num[:1]) + 1900
+        # if id_num[6] == '1' or id_num[6] == '2':
+        if not id_num[0] == '0':
+            year_birth = int(id_num[:2]) + 1900
         else:
-            year_birth = int(id_num[:1]) + 2000
+            year_birth = int(id_num[:2]) + 2000
 
         age = year_curr - year_birth
         if age >= 19:
@@ -147,25 +137,3 @@ def get_ckpt_inf(ckpt_path, steps_per_epoch):
     steps = (epochs - 1) * steps_per_epoch + batchs
 
     return epochs, steps + 1
-
-
-if __name__ == "__main__":
-    # image = cv2.imread("your idcard here")
-    image = cv2.imread("ids/ygs.jpg")
-    # image = cv2.imread("faces/ygs_face.jpg")
-
-    # get ID number
-    id_num = get_idnum(image)
-    print("주민등록번호: ", id_num)
-
-    # check ID number
-    # print(is_verified_idnum(image))
-
-    # check age
-    # print(is_verified_age(image))
-
-    # crop face from ID card
-    # result = crop_face_from_id(image)
-    # cv2.imshow("result", result)
-    # cv2.imwrite("ids/ush_cropped.jpg", result)
-    # cv2.waitKey(0)

@@ -7,6 +7,8 @@ from PIL import Image
 from tqdm import tqdm
 from glob import glob
 
+from utils import crop_face_from_id
+
 
 def wrapper_unzip():
     if not os.path.exists("Middle_Resolution"):
@@ -115,6 +117,52 @@ def make_pair_numpy():
     np.save('kface_val_npy/is_same.npy', is_same)
 
 
+def make_pair_numpy_benchmark():
+    ref_imgs = []
+    query_imgs = []
+    is_same = []
+    ref_img_paths = glob("ids/*.jpg")
+    query_img_paths = glob("faces/*.jpg")
+
+    with open("references_benchmark.csv", 'w', encoding='utf-8') as f:
+        f.write("references, queries, is_same\n")
+        for i, ref_name in enumerate(ref_img_paths):
+            print(f"Iter {i+1:2d}: {os.path.basename(ref_name)}")
+            # random_ref = np.random.randint(40)
+            # random_query = np.random.randint(40)
+            # ref_name = ref_img_paths[random_ref]
+            # query_name = query_img_paths[random_query]
+            for query_name in tqdm(query_img_paths):
+                f.write(f"{os.path.basename(ref_name)}, {os.path.basename(query_name)}, ")
+                if os.path.basename(ref_name) == os.path.basename(query_name):
+                    is_pair = 1
+                else:
+                    is_pair = 0
+                f.write(f"{is_pair}\n")
+
+                ref_img = cv2.imread(ref_name)
+                ref_img = crop_face_from_id(ref_img, weight_path="../weights")
+                ref_img = cv2.resize(ref_img, (112, 112))
+                query_img = cv2.imread(query_name)
+                query_img = crop_face_from_id(query_img, weight_path="../weights")
+                query_img = cv2.resize(query_img, (112, 112))
+
+                ref_imgs.append(ref_img)
+                query_imgs.append(query_img)
+                is_same.append(is_pair)
+
+        ref_imgs = np.array(ref_imgs, dtype=np.uint8)
+        query_imgs = np.array(query_imgs, dtype=np.uint8)
+        is_same = np.array(is_same, dtype=np.uint8)
+
+        if not os.path.exists('benchmark_npy'):
+            os.makedirs('benchmark_npy')
+
+        np.save('benchmark_npy/references.npy', ref_imgs)
+        np.save('benchmark_npy/queries.npy', query_imgs)
+        np.save('benchmark_npy/is_same.npy', is_same)
+
+
 def main():
     wrapper_unzip()
 
@@ -124,6 +172,7 @@ def main():
     shutil.rmtree("Middle_Resolution")
 
     make_pair_numpy()
+    make_pair_numpy_benchmark()
 
 
 if __name__ == "__main__":
