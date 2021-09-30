@@ -20,3 +20,6 @@ tesseract v5.0.0-alpha.20201127
   - download `shape_predictor_68_face_landmarks.dat.bz2`
   - upzip `shape_predictor_68_face_landmarks.dat.bz2` -> `shape_predictor_68_face_landmarks.dat`
   - place weight file into `~/weight/`
+
+### project document
+https://velog.io/@riverdeer/ArcFace-Korean-face-recognition
