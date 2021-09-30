@@ -1,4 +1,5 @@
 import numpy as np
+import argparse
 import tensorflow as tf
 import cv2
 import dlib
@@ -142,16 +143,17 @@ def main(detector, predictor, recognition_model, sr_id_cropped):
 
 
 if __name__ == "__main__":
-    # LR_SHAPE = (112 // 2, 112 // 2, 3)
-    # INPUT_SHAPE = (112, 112, 3)
-
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--weights", type=str)
+    args = parser.parse_args()
+  
     print("[INFO] loading face detector weights...")
     main_detector = dlib.get_frontal_face_detector()
     main_predictor = dlib.shape_predictor("weights/shape_predictor_68_face_landmarks.dat")
 
     print("[INFO] loading face recognition weights...")
     arcface = ArcFaceModel(size=112, backbone_type='ResNet50', training=False)
-    ckpt_path = tf.train.latest_checkpoint('weights/arc_res50_kface_finetune_20K-lr0.001-bs128-epochs50')
+    ckpt_path = tf.train.latest_checkpoint(args.weights)
     arcface.load_weights(ckpt_path)
 
     # resolution_model =
@@ -167,11 +169,8 @@ if __name__ == "__main__":
         start = time.time()
         id_image = cv2.imread(file_name)
 
-        # if is_verified_idnum(id_image) and is_verified_age(id_image):
         if is_verified_age(id_image):
             sr_id_cropped = crop_face_from_id(id_image)
-            # sr_id_cropped = cv2.resize(sr_id_cropped, LR_SHAPE)
-            # sr_id_cropped = resolution_model(sr_id_cropped)
 
             print("[INFO] Your ID card is verified")
             main(main_detector, main_predictor, arcface, sr_id_cropped)
