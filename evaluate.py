@@ -22,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 import numpy as np
+import argparse
 import tensorflow as tf
 import matplotlib.pyplot as plt
 
@@ -85,9 +86,13 @@ if __name__ == '__main__':
     import os
     import cv2
     from sklearn.metrics import auc
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--weights", type=str)
+    args = parser.parse_args()
 
     arcface = ArcFaceModel(size=112, backbone_type='ResNet50', training=False)
-    ckpt_path = tf.train.latest_checkpoint('./weights/arc_res50_kface_finetune_9K-lr0.001-bs128-epochs50')
+    ckpt_path = tf.train.latest_checkpoint(args.weights)
     arcface.load_weights(ckpt_path)
 
     data_path = "data/kface_val_npy"
@@ -96,22 +101,6 @@ if __name__ == '__main__':
     queries = np.load(os.path.join(data_path, "queries.npy")).astype(np.float32) / 255.
     is_same = np.load(os.path.join(data_path, "is_same.npy"))
 
-    print(ref.shape, queries.shape)
-
-    ### srgan
-    # cfg = load_yaml('configs/srgan.yaml')
-    # srgan = srgan.FastSRGAN(cfg).build_generator()
-    # ckpt_path = tf.train.latest_checkpoint('weights/srgan/generator')
-    # srgan.load_weights(ckpt_path)
-    # ref = cv2.resize(ref, (56, 56))
-    # ref = srgan.predict(ref)
-    ### srgan
-
-    ### vdsr
-    vdsr = vdsr.vdsr((112, 112, 3), 64)
-    vdsr.load_weights("weights/vdsr-bs64-ps112.hdf5")
-    ref = vdsr.predict(ref)
-    ### vdsr
     print(ref.shape, queries.shape)
 
     embeds1 = get_embedding(arcface, ref)
@@ -127,10 +116,10 @@ if __name__ == '__main__':
     plt.figure(figsize=(5, 5))
     plt.xlabel("False Positive Rate")
     plt.ylabel("True Positive Rate")
-    plt.title("ROC Curve (Fine tuned on [K-Face])")
+    plt.title("ROC Curve")
     plt.xlim([0.0, 1.0])
     plt.ylim([0.0, 1.05])
     plt.plot(fprs, tprs, label=f"ROC Curve (AUC = {auc(fprs, tprs):.4f}")
     plt.legend()
     plt.plot([0, 1], [0, 1], linestyle='--')
-    plt.savefig('resource/epochs100.png')
+    plt.show()
