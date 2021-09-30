@@ -28,7 +28,6 @@ import matplotlib.pyplot as plt
 
 from utils import l2_norm, load_yaml
 from networks.recognition.models import ArcFaceModel
-from networks.resolution import srgan, vdsr
 
 
 def get_embedding(model, x):
